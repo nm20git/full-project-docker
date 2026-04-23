@@ -10,6 +10,8 @@ using System;
 using System.Data;
 using Microsoft.Extensions.Logging;
 using project.DAL.Intefaces;
+using Microsoft.Extensions.Caching.Distributed;
+
 
 namespace project.Controllers
 {
@@ -20,23 +22,55 @@ namespace project.Controllers
         private readonly IGiftBLL _giftBLL;
         private readonly IMapper _mapper;
         private readonly ILogger<GiftController> _logger;
+        private readonly IDistributedCache _cache;
 
-        public GiftController(IGiftBLL giftBLL, IMapper mapper, ILogger<GiftController> logger)
+        public GiftController(IGiftBLL giftBLL, IMapper mapper, ILogger<GiftController> logger, IDistributedCache cache)
         {
             _giftBLL = giftBLL;
             _mapper = mapper;
             _logger = logger;
+            _cache = cache;
         }
 
         // GET: api/<GiftController>
+        //redis
         [Authorize]
         [HttpGet]
         public async Task<IActionResult> Get()
         {
+            string cacheKey = "gifts-all";
+
+            var cachedData = await _cache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                Console.WriteLine("HIT Cache");
+                var cachedGifts = System.Text.Json.JsonSerializer.Deserialize<List<GiftDTO>>(cachedData);
+                return Ok(cachedGifts);
+            }
+
+            Console.WriteLine("MISS Cache");
+
             var gifts = await _giftBLL.Get();
             var dto = _mapper.Map<List<GiftDTO>>(gifts);
+
+            var options = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+            };
+
+            var serializedData = System.Text.Json.JsonSerializer.Serialize(dto);
+            await _cache.SetStringAsync(cacheKey, serializedData, options);
+
             return Ok(dto);
         }
+        // [HttpGet]
+        // public async Task<IActionResult> Get()
+        // {
+        //     var gifts = await _giftBLL.Get();
+        //     var dto = _mapper.Map<List<GiftDTO>>(gifts);
+        //     return Ok(dto);
+        // }
 
 
         // GET api/<GiftController>/5

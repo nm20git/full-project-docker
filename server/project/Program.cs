@@ -119,6 +119,10 @@ namespace project
                     builder.Configuration.GetConnectionString("DefaultConnection")
                 )
             );
+            builder.Services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = builder.Configuration["Redis:ConnectionString"];
+            });
 
             builder.Services.AddCors(options =>
             {
